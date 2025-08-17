@@ -5,16 +5,11 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>قاب عکس WebAR – نسخهٔ نهایی</title>
-
-  <!-- A-Frame و MindAR از CDN (jsDelivr پایدار) -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <meta name="color-scheme" content="dark">
 
   <style>
-    :root { color-scheme: dark; }
-    html, body { height: 100%; margin: 0; background:#000; }
-    body { font-family: system-ui, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; color:#eee; }
-
+    html, body { height: 100%; margin: 0; background:#000; color:#eee; }
+    body { font-family: system-ui, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; }
     #ui {
       position: fixed; inset: 0 auto auto 0; z-index: 10;
       display: flex; gap: 8px; align-items: center; padding: 10px 12px;
@@ -26,21 +21,61 @@
       padding:6px 10px; border-radius:10px; cursor:pointer; font-size:14px;
     }
     .btn[disabled] { opacity:.6; cursor:default; }
-
     .hint {
       position: fixed; inset: auto 0 0 0; z-index: 9; text-align:center;
       padding:10px 12px; font-size: 13px;
       background: linear-gradient(transparent, rgba(0,0,0,.6));
     }
-
     #status {
       position:fixed; top:50px; left:10px; z-index:10;
       background:#0008; color:#0f0; padding:6px 10px; border-radius:8px;
       font:12px/1.6 monospace;
     }
+    noscript {
+      position: fixed; inset: 0; display:flex; align-items:center; justify-content:center;
+      background:#000; color:#fff; z-index: 9999; padding:20px; text-align:center;
+    }
   </style>
+
+  <!-- لودر هوشمند: اول محلی، بعد jsDelivr، بعد unpkg -->
+  <script>
+  (function(){
+    function loadScriptSequential(urls){
+      return new Promise((resolve, reject)=>{
+        let i = 0;
+        function next(){
+          if(i >= urls.length) return reject(new Error('Failed to load: ' + urls.join(' | ')));
+          const s = document.createElement('script');
+          s.src = urls[i++];
+          s.onload = () => resolve();
+          s.onerror = () => next();
+          document.head.appendChild(s);
+        }
+        next();
+      });
+    }
+
+    // اول A-Frame، بعد MindAR
+    window.libsReady = (async () => {
+      // A-Frame
+      await loadScriptSequential([
+        './lib/aframe.min.js',
+        'https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js',
+        'https://unpkg.com/aframe@1.5.0/dist/aframe.min.js'
+      ]);
+      // MindAR Image (A-Frame)
+      await loadScriptSequential([
+        './lib/mindar-image-aframe.prod.js',
+        'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js',
+        'https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js'
+      ]);
+    })();
+  })();
+  </script>
 </head>
 <body>
+  <noscript>برای اجرای AR باید JavaScript فعال باشد.</noscript>
+
   <!-- UI -->
   <div id="ui">
     <button id="btnStart" class="btn">شروع اسکن</button>
@@ -50,113 +85,112 @@
   <div id="status">status: boot</div>
   <div class="hint">گوشی را به قاب/تصویر هدف بگیرید تا ویدئو داخل قاب پخش شود.</div>
 
-  <!-- صحنه WebAR با autoStart -->
-  <a-scene
-    mindar-image="imageTargetSrc: ./targets/target.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01;"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-    renderer="colorManagement: true; physicallyCorrectLights: true"
-    embedded>
-
-    <!-- دوربین MindAR -->
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-    <!-- ریشهٔ هدف شماره ۰ -->
-    <a-entity mindar-image-target="targetIndex: 0">
-      <!-- سطح پخش ویدیو (اینجا 16:9؛ در صورت نیاز height را عوض کن) -->
-      <a-video
-        id="videoPlane"
-        src="#videoEl"
-        position="0 0 0"
-        rotation="0 0 0"
-        width="1"
-        height="0.5625"
-        material="shader: flat; transparent: true;">
-      </a-video>
-
-      <!-- حاشیهٔ تیره پشت ویدیو برای حس قاب -->
-      <a-plane position="0 0 -0.002" width="1.05" height="0.59" color="#111" material="opacity:0.6"></a-plane>
-    </a-entity>
-  </a-scene>
-
-  <!-- ویدیوی HTML5 که روی صفحهٔ سه‌بعدی نگاشت می‌شود -->
+  <!-- ویدیو HTML5 که روی صفحه سه‌بعدی نگاشت می‌شود -->
   <video id="videoEl" playsinline webkit-playsinline preload="auto" muted loop style="display:none">
     <!-- ویدیوی خودتان را جایگزین کنید -->
     <source src="./targets/video.mp4" type="video/mp4" />
   </video>
 
+  <!-- صحنه را بعد از لود لایبرری‌ها تزریق می‌کنیم تا اگر لایبرری نیامد، خطا ندهد -->
+  <div id="sceneHost"></div>
+
   <script>
-  (function(){
+  (async function(){
+    const statusEl = document.getElementById('status');
+    const setStatus = (s)=>{ statusEl.textContent = 'status: ' + s; console.log('[status]', s); };
+
+    try {
+      setStatus('loading libs');
+      await window.libsReady;
+      if (!window.AFRAME) throw new Error('A-Frame NOT loaded');
+      setStatus('libs loaded');
+    } catch (e) {
+      setStatus('libs failed to load');
+      alert('خطا در بارگذاری لایبرری‌ها. اگر ایران هستی، CDNها ممکنه کند/بلاک باشند. بهتره فایل‌ها را در پوشه lib/ محلی کپی کنی.');
+      console.error(e);
+      return;
+    }
+
+    // صحنه A-Frame + MindAR را تزریق کن
+    const host = document.getElementById('sceneHost');
+    host.innerHTML = `
+      <a-scene
+        mindar-image="imageTargetSrc: ./targets/target.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01;"
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false"
+        renderer="colorManagement: true; physicallyCorrectLights: true"
+        embedded>
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-entity mindar-image-target="targetIndex: 0">
+          <a-video id="videoPlane" src="#videoEl" position="0 0 0" rotation="0 0 0"
+                   width="1" height="0.5625" material="shader: flat; transparent: true;"></a-video>
+          <a-plane position="0 0 -0.002" width="1.05" height="0.59" color="#111" material="opacity:0.6"></a-plane>
+        </a-entity>
+      </a-scene>
+    `;
+
     const btnStart = document.getElementById('btnStart');
     const btnMute  = document.getElementById('btnMute');
     const videoEl  = document.getElementById('videoEl');
     const sceneEl  = document.querySelector('a-scene');
-    const statusEl = document.getElementById('status');
 
-    const setStatus = (s)=>{ statusEl.textContent = 'status: ' + s; console.log('[status]', s); };
-
-    // برای autoplay موبایل، بی‌صدا شروع می‌کنیم
+    // autoplay-safe
     videoEl.muted = true;
 
-    // نمایش خطا با نکات کاربردی
-    function showCameraError(err){
-      console.error('Camera error:', err);
-      alert(
-        'مشکل دوربین: ' + (err && (err.name || err.message || err)) + '\n\n' +
-        (location.protocol==='https:' ? '' : '⚠️ این صفحه روی HTTPS نیست.\n') +
-        (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '' : '⚠️ مرورگر getUserMedia ندارد.\n') +
-        'نکات:\n- صفحه را در Safari یا Chrome اصلی باز کن (نه داخل اینستاگرام/تلگرام).\n' +
-        '- به سایت اجازه Camera بده.\n' +
-        '- اگر VPN/Recorder دوربین فعاله، ببند.\n' +
-        '- همهٔ تب‌های دوربین را ببند و ریفرش کن.'
-      );
+    // پریفِلایت: وجود فایل‌های تارگت را چک کن تا اگر 404 بود، زود بفهمیم
+    async function head(url){
+      try {
+        const r = await fetch(url + '?nocache=' + Date.now(), { method: 'HEAD' });
+        return r.ok ? null : (r.status + ' ' + r.statusText);
+      } catch(e){ return e.message || String(e); }
     }
+    setStatus('preflight');
+    const errMind = await head('./targets/target.mind');
+    const errVid  = await head('./targets/video.mp4');
+    if (errMind) { setStatus('missing ./targets/target.mind → ' + errMind); return; }
+    if (errVid)  { setStatus('missing ./targets/video.mp4 → ' + errVid); return; }
 
-    // بعد از لود صحنه، سیستم‌ها آماده‌اند
-    sceneEl.addEventListener('loaded', () => {
-      setStatus('scene loaded');
+    // ایونت‌ها
+    sceneEl.addEventListener('loaded', () => setStatus('scene loaded'));
+    sceneEl.addEventListener('arReady', () => setStatus('ar ready (waiting for target)'));
+    sceneEl.addEventListener('arError', (e) => { setStatus('ar error'); console.error(e); });
+    sceneEl.addEventListener('targetFound', () => { setStatus('target found → playing'); videoEl.play().catch(()=>{}); });
+    sceneEl.addEventListener('targetLost',  () => { setStatus('target lost → paused');  videoEl.pause(); });
 
-      // ایونت‌های MindAR
-      sceneEl.addEventListener('arReady', () => setStatus('ar ready (waiting for target)'));
-      sceneEl.addEventListener('arError', (e) => { setStatus('ar error'); console.error(e); });
-      sceneEl.addEventListener('targetFound', () => { setStatus('target found → playing'); videoEl.play().catch(()=>{}); });
-      sceneEl.addEventListener('targetLost',  () => { setStatus('target lost → paused'); videoEl.pause(); });
-
-      // دکمهٔ صدا
-      btnMute.addEventListener('click', () => {
-        videoEl.muted = !videoEl.muted;
-        btnMute.textContent = videoEl.muted ? '🔇 بی‌صدا' : '🔊 صدا روشن';
-        if (!videoEl.paused) videoEl.play().catch(()=>{});
-      });
-
-      // دکمهٔ شروع: گرفتن اجازهٔ کاربر و kick اولیه برای autoplay
-      btnStart.addEventListener('click', async () => {
-        try {
-          if (!isSecureContext) { alert('این صفحه باید روی HTTPS باز شود.'); return; }
-          if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
-            throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
-          }
-          setStatus('requesting camera permission');
-          // درخواست کوتاه برای مجوز دوربین (بلافاصله آزاد می‌کنیم)
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          stream.getTracks().forEach(t => t.stop());
-          // kick اولیه برای برخی مرورگرها
-          await videoEl.play().catch(()=>{});
-          btnStart.textContent = 'اسکن فعال است';
-          btnStart.disabled = true;
-          setStatus('ready (point camera to target)');
-        } catch (err) {
-          showCameraError(err);
-          setStatus('error');
-        }
-      });
-
-      // تعامل لمسی برای کمک به autoplay در iOS
-      document.addEventListener('touchend', function once(){
-        videoEl.play().catch(()=>{});
-        document.removeEventListener('touchend', once, false);
-      }, false);
+    // دکمه صدا
+    btnMute.addEventListener('click', () => {
+      videoEl.muted = !videoEl.muted;
+      btnMute.textContent = videoEl.muted ? '🔇 بی‌صدا' : '🔊 صدا روشن';
+      if (!videoEl.paused) videoEl.play().catch(()=>{});
     });
+
+    // دکمه شروع: مجوز دوربین + kick autoplay
+    btnStart.addEventListener('click', async () => {
+      try {
+        if (!isSecureContext) { alert('این صفحه باید روی HTTPS باز شود (مثلاً GitHub Pages).'); return; }
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+          throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
+        }
+        setStatus('requesting camera permission');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream.getTracks().forEach(t => t.stop());
+        await videoEl.play().catch(()=>{});
+        btnStart.textContent = 'اسکن فعال است';
+        btnStart.disabled = true;
+        setStatus('ready (point camera to target)');
+      } catch (err) {
+        console.error('Camera error:', err);
+        alert('مشکل دوربین: ' + (err.name || err.message || err));
+        setStatus('error');
+      }
+    });
+
+    // کمک به autoplay در iOS
+    document.addEventListener('touchend', function once(){
+      videoEl.play().catch(()=>{});
+      document.removeEventListener('touchend', once, false);
+    }, false);
+
   })();
   </script>
 </body>
