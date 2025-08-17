@@ -3,51 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>قاب عکس WebAR – دوربین قابل‌مشاهده</title>
+  <title>قاب عکس WebAR – پس‌زمینهٔ دوربین</title>
   <meta name="color-scheme" content="dark" />
 
   <style>
     html, body { height:100%; margin:0; background:#000; color:#eee; font-family:system-ui,Segoe UI,Roboto,Arial; }
-    #ui { position:fixed; left:0; top:0; z-index:10; display:flex; gap:8px; padding:10px 12px;
-          background:linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,0)); backdrop-filter:saturate(120%) blur(4px); }
+    /* ویدئو پس‌زمینهٔ دوربین: پشت همه‌چیز، فول‌اسکرین */
+    #bgcam {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0; background: #000;
+      transform: scaleX(1); /* دوربین پشتی؛ اگر سلفی شد، scaleX(-1) */
+    }
+    /* بوم A-Frame شفاف و روی ویدئو */
+    .a-canvas {
+      position: fixed !important; inset: 0 !important;
+      z-index: 1 !important; background: transparent !important;
+    }
+    /* UI بالا دست همه */
+    #ui {
+      position: fixed; left:0; top:0; z-index: 10;
+      display:flex; gap:8px; align-items:center; padding:10px 12px;
+      background:linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,0));
+      backdrop-filter:saturate(120%) blur(4px);
+    }
     .btn { background:#ffffff22; border:1px solid #ffffff55; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
     .btn[disabled]{ opacity:.5; cursor:default; }
     .hint{ position:fixed; left:0; right:0; bottom:0; z-index:10; text-align:center; padding:10px 12px;
            background:linear-gradient(transparent, rgba(0,0,0,.65)); }
     #status{ position:fixed; top:50px; left:10px; z-index:10; background:#0008; color:#0f0; padding:6px 10px; border-radius:8px; font:12px/1.6 monospace; }
-    /* مطمئن شو بوم A-Frame فول‌اسکرین روی صفحه است */
-    .a-canvas { position:fixed !important; inset:0 !important; }
   </style>
 
-  <!-- لایبرری‌های محلی (توصیه‌شده برای ایران)؛ مطمئن شو کل dist از mind-ar@1.2.5 در lib/ هست -->
+  <!-- نسخه‌های محلی (توصیه شده در ایران): مطمئن شو کل dist از mind-ar@1.2.5 در lib/ هست -->
   <script src="./lib/aframe.min.js"></script>
   <script src="./lib/mindar-image-aframe.prod.js"></script>
 </head>
 <body>
+  <!-- ویدئوی پس‌زمینه که استریم دوربین روی آن می‌نشیند -->
+  <video id="bgcam" autoplay playsinline muted></video>
+
+  <!-- UI -->
   <div id="ui">
     <button id="btnStart" class="btn">شروع اسکن</button>
     <button id="btnMute" class="btn">🔇 بی‌صدا</button>
     <span id="status">status: boot</span>
   </div>
-  <div class="hint">گوشی را به تصویر هدف بگیر؛ وقتی پیدا شد، ویدئو داخل قاب پخش می‌شود.</div>
+  <div class="hint">گوشی را به تصویر هدف بگیر؛ وقتی پیدا شد، ویدیو داخل قاب پخش می‌شود.</div>
 
-  <!-- ویدئوی HTML5 که روی plane نگاشت می‌شود -->
+  <!-- ویدئوی محتوای هدیه که روی قاب می‌افتد -->
   <video id="videoEl" playsinline webkit-playsinline preload="auto" loop muted crossorigin="anonymous" style="display:none">
     <source src="./targets/video.mp4" type="video/mp4" />
   </video>
 
-  <!-- صحنهٔ A-Frame (بدون embedded تا فول‌اسکرین شود) -->
+  <!-- صحنهٔ A-Frame با شفافیت تا bgcam دیده شود -->
   <a-scene
     mindar-image="imageTargetSrc: ./targets/target.mind; autoStart: true; filterMinCF:0.001; filterBeta:0.01;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    renderer="colorManagement: true; physicallyCorrectLights: true">
-    
+    renderer="alpha: true; colorManagement: true; physicallyCorrectLights: true">
+
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     <!-- گره هدف -->
     <a-entity mindar-image-target="targetIndex: 0">
-      <!-- به‌جای <a-video> از plane با متریال ویدئو استفاده شده -->
+      <!-- (پایدارتر از <a-video>): plane با متریال ویدئو -->
       <a-plane id="videoPlane"
                position="0 0 0"
                rotation="0 0 0"
@@ -68,31 +86,46 @@
     const btnMute  = $('#btnMute');
     const sceneEl  = document.querySelector('a-scene');
     const videoEl  = $('#videoEl');
+    const bgcam    = $('#bgcam');
 
     const setStatus = s => { statusEl.textContent = 'status: ' + s; console.log('[status]', s); };
 
-    // برای autoplay روی موبایل باید اول بی‌صدا باشه
+    // برای autoplay موبایل، محتوای هدیه را بی‌صدا شروع می‌کنیم
     videoEl.muted = true;
 
-    // رویدادهای مفید برای دیباگ
+    // رویدادهای MindAR برای دیباگ
     sceneEl.addEventListener('loaded',   () => setStatus('scene loaded'));
-    sceneEl.addEventListener('arReady',  () => setStatus('ar ready (waiting for target)'));
+    sceneEl.addEventListener('arReady',  () => {
+      setStatus('ar ready (waiting for target)');
+      // تلاش برای استفاده از ویدئوی داخلی MindAR به‌عنوان پس‌زمینه (اگر موجود بود)
+      const candidates = Array.from(document.querySelectorAll('video')).filter(v => v !== videoEl && v !== bgcam && v.srcObject);
+      if (candidates[0]) {
+        try {
+          bgcam.srcObject = candidates[0].srcObject; // از همان استریم MindAR استفاده کن
+          bgcam.play().catch(()=>{});
+          setStatus('bg from MindAR stream');
+        } catch(e) { console.warn('bgcam attach from MindAR failed', e); }
+      }
+    });
     sceneEl.addEventListener('arError',  (e) => { setStatus('ar error'); console.error(e); });
     sceneEl.addEventListener('targetFound', () => { setStatus('target found → playing'); videoEl.play().catch(()=>{}); });
     sceneEl.addEventListener('targetLost',  () => { setStatus('lost → paused'); videoEl.pause(); });
 
-    // دکمه شروع: فقط ژست کاربر + kick autoplay
+    // دکمه شروع: مجوز دوربین + نمایش پس‌زمینه
     btnStart.addEventListener('click', async () => {
       try {
         if (!isSecureContext) { alert('این صفحه باید روی HTTPS باز شود (GitHub Pages اوکی است).'); return; }
         if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
-          throw new TypeError('getUserMedia در این محیط دردسترس نیست.');
+          throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
         }
         setStatus('requesting camera permission');
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        s.getTracks().forEach(t => t.stop()); // مجوز گرفتیم؛ می‌بندیم تا MindAR خودش بگیره
+        // یک‌بار استریم بگیر و «نگه‌دار» تا bgcam نمایش بدهد (MindAR هم جداگانه اسکن می‌کند)
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        bgcam.srcObject = stream;
+        await bgcam.play().catch(()=>{});
+        // kick autoplay برای ویدئوی محتوای هدیه
         await videoEl.play().catch(()=>{});
-        btnStart.textContent = 'اسکن فعّال شد';
+        btnStart.textContent = 'اسکن فعال شد';
         btnStart.disabled = true;
         setStatus('ready (point camera to target)');
       } catch (err) {
@@ -102,7 +135,7 @@
       }
     });
 
-    // دکمه بی‌صدا/با صدا
+    // دکمه بی‌صدا/با صدا برای محتوای هدیه
     btnMute.addEventListener('click', () => {
       videoEl.muted = !videoEl.muted;
       btnMute.textContent = videoEl.muted ? '🔇 بی‌صدا' : '🔊 صدا روشن';
