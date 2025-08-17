@@ -31,6 +31,17 @@
     .hint{ position:fixed; left:0; right:0; bottom:0; z-index:10; text-align:center; padding:10px 12px;
            background:linear-gradient(transparent, rgba(0,0,0,.65)); }
     #status{ position:fixed; top:50px; left:10px; z-index:10; background:#0008; color:#0f0; padding:6px 10px; border-radius:8px; font:12px/1.6 monospace; }
+
+    /* پنل کالیبراسیون */
+    #calib{
+      position:fixed; right:10px; top:10px; z-index:11;
+      background:#000a; color:#fff; padding:10px; border-radius:12px;
+      font:12px system-ui; width:220px
+    }
+    #calib label{ display:block; margin:4px 0 }
+    #calib input[type="range"]{ width:100% }
+    #calib .row{ display:flex; gap:6px; margin-top:6px }
+    #calib button{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid #555; background:#111; color:#fff; cursor:pointer }
   </style>
 
   <!-- نسخه‌های محلی (توصیه شده در ایران): مطمئن شو کل dist از mind-ar@1.2.5 در lib/ هست -->
@@ -47,6 +58,21 @@
     <button id="btnMute" class="btn">🔇 بی‌صدا</button>
     <span id="status">status: boot</span>
   </div>
+
+  <!-- پنل کالیبراسیون زنده -->
+  <div id="calib">
+    <div style="margin-bottom:6px;font-weight:600">کالیبراسیون</div>
+    <label>Scale W <input id="sw" type="range" min="0.80" max="1.20" step="0.001" value="1.000"></label>
+    <label>Scale H <input id="sh" type="range" min="0.80" max="1.20" step="0.001" value="1.000"></label>
+    <label>Offset X <input id="ox" type="range" min="-0.10" max="0.10" step="0.001" value="0.000"></label>
+    <label>Offset Y <input id="oy" type="range" min="-0.10" max="0.10" step="0.001" value="0.000"></label>
+    <label>Rotate° <input id="rt" type="range" min="-5" max="5" step="0.1" value="0.0"></label>
+    <div class="row">
+      <button id="saveCal">ذخیره</button>
+      <button id="resetCal">ریست</button>
+    </div>
+  </div>
+
   <div class="hint">گوشی را به تصویر هدف بگیر؛ وقتی پیدا شد، ویدیو داخل قاب پخش می‌شود.</div>
 
   <!-- ویدئوی محتوای هدیه که روی قاب می‌افتد -->
@@ -67,7 +93,7 @@
     <a-entity mindar-image-target="targetIndex: 0">
       <!-- (پایدارتر از <a-video>): plane با متریال ویدئو -->
       <a-plane id="videoPlane"
-               position="0 0 0"
+               position="0 0 0.0001"
                rotation="0 0 0"
                width="1"
                height="0.5625"
@@ -87,21 +113,46 @@
     const sceneEl  = document.querySelector('a-scene');
     const videoEl  = $('#videoEl');
     const bgcam    = $('#bgcam');
+    const videoPlane = document.getElementById('videoPlane');
+
+    // کالیبراسیون
+    const sw = document.getElementById('sw');
+    const sh = document.getElementById('sh');
+    const ox = document.getElementById('ox');
+    const oy = document.getElementById('oy');
+    const rt = document.getElementById('rt');
+    const saveCal = document.getElementById('saveCal');
+    const resetCal = document.getElementById('resetCal');
 
     const setStatus = s => { statusEl.textContent = 'status: ' + s; console.log('[status]', s); };
 
     // برای autoplay موبایل، محتوای هدیه را بی‌صدا شروع می‌کنیم
     videoEl.muted = true;
 
+    // فیت خودکار نسبت ویدیو روی قاب (عرض پایه = 1)
+    let baseH = 0.5625; // مقدار پیش‌فرض تا قبل از لود متادیتا
+    function fitPlaneToVideo(){
+      const vw = videoEl.videoWidth || 0, vh = videoEl.videoHeight || 0;
+      if (!vw || !vh) return;
+      const ar = vw / vh;
+      baseH = 1 / ar; // چون width=1
+      videoPlane.setAttribute('width', 1);
+      videoPlane.setAttribute('height', baseH);
+      // کمی جلو آوردن تا زِد-فایتینگ کم شود
+      videoPlane.setAttribute('position', `${ox.value} ${oy.value} 0.0001`);
+      applyCal(); // بعد از فیت، کالیبراسیون اعمال شود
+      console.log('fitPlaneToVideo:', {vw, vh, ar, width:1, height:baseH});
+    }
+
     // رویدادهای MindAR برای دیباگ
     sceneEl.addEventListener('loaded',   () => setStatus('scene loaded'));
     sceneEl.addEventListener('arReady',  () => {
       setStatus('ar ready (waiting for target)');
-      // تلاش برای استفاده از ویدئوی داخلی MindAR به‌عنوان پس‌زمینه (اگر موجود بود)
+      // تلاش برای استفاده از استریم داخلی MindAR به‌عنوان پس‌زمینه (اگر وجود داشت)
       const candidates = Array.from(document.querySelectorAll('video')).filter(v => v !== videoEl && v !== bgcam && v.srcObject);
       if (candidates[0]) {
         try {
-          bgcam.srcObject = candidates[0].srcObject; // از همان استریم MindAR استفاده کن
+          bgcam.srcObject = candidates[0].srcObject;
           bgcam.play().catch(()=>{});
           setStatus('bg from MindAR stream');
         } catch(e) { console.warn('bgcam attach from MindAR failed', e); }
@@ -119,7 +170,7 @@
           throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
         }
         setStatus('requesting camera permission');
-        // یک‌بار استریم بگیر و «نگه‌دار» تا bgcam نمایش بدهد (MindAR هم جداگانه اسکن می‌کند)
+        // استریم برای bg و ژست کاربر (MindAR هم جداگانه اسکن می‌کند)
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
         bgcam.srcObject = stream;
         await bgcam.play().catch(()=>{});
@@ -145,10 +196,54 @@
     // لاگ ویدئو برای اطمینان از دریافت فریم
     videoEl.addEventListener('loadedmetadata', () => {
       console.log('video meta:', videoEl.videoWidth, 'x', videoEl.videoHeight, 'dur=', videoEl.duration);
+      fitPlaneToVideo();
     });
     videoEl.addEventListener('loadeddata', () => {
       console.log('video first frame ready');
+      fitPlaneToVideo();
+      // کمی تاخیر، سپس کالیبراسیون ذخیره‌شده را بارگذاری کنیم
+      setTimeout(loadCal, 50);
     });
+
+    // ---- Calibration logic ----
+    function applyCal(){
+      const W = 1 * parseFloat(sw.value);
+      const H = baseH * parseFloat(sh.value);
+      videoPlane.setAttribute('width',  W);
+      videoPlane.setAttribute('height', H);
+
+      const x = parseFloat(ox.value);
+      const y = parseFloat(oy.value);
+      const r = parseFloat(rt.value);
+      videoPlane.setAttribute('position', `${x} ${y} 0.0001`);
+      videoPlane.setAttribute('rotation', `0 0 ${r}`);
+    }
+    function loadCal(){
+      const s = localStorage.getItem('calib') || '{}';
+      try{
+        const c = JSON.parse(s);
+        if (c.sw) sw.value = c.sw;
+        if (c.sh) sh.value = c.sh;
+        if (c.ox) ox.value = c.ox;
+        if (c.oy) oy.value = c.oy;
+        if (c.rt) rt.value = c.rt;
+      }catch{}
+      applyCal();
+    }
+    function saveCalib(){
+      const c = { sw:sw.value, sh:sh.value, ox:ox.value, oy:oy.value, rt:rt.value };
+      localStorage.setItem('calib', JSON.stringify(c));
+    }
+    function resetCalib(){
+      sw.value = sh.value = '1.000';
+      ox.value = oy.value = '0.000';
+      rt.value = '0.0';
+      saveCalib();
+      applyCal();
+    }
+    [sw,sh,ox,oy,rt].forEach(el=>el.addEventListener('input', applyCal));
+    saveCal.addEventListener('click', saveCalib);
+    resetCal.addEventListener('click', resetCalib);
   </script>
 </body>
 </html>
