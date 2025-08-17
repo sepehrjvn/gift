@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport"
         content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>قاب عکس WebAR – نمونهٔ نهایی</title>
+  <title>قاب عکس WebAR – نسخهٔ نهایی</title>
 
-  <!-- A-Frame و MindAR از CDN (jsDelivr پایدارتر از unpkg) -->
+  <!-- A-Frame و MindAR از CDN (jsDelivr پایدار) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -14,6 +14,7 @@
     :root { color-scheme: dark; }
     html, body { height: 100%; margin: 0; background:#000; }
     body { font-family: system-ui, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; color:#eee; }
+
     #ui {
       position: fixed; inset: 0 auto auto 0; z-index: 10;
       display: flex; gap: 8px; align-items: center; padding: 10px 12px;
@@ -25,25 +26,33 @@
       padding:6px 10px; border-radius:10px; cursor:pointer; font-size:14px;
     }
     .btn[disabled] { opacity:.6; cursor:default; }
+
     .hint {
       position: fixed; inset: auto 0 0 0; z-index: 9; text-align:center;
       padding:10px 12px; font-size: 13px;
       background: linear-gradient(transparent, rgba(0,0,0,.6));
     }
+
+    #status {
+      position:fixed; top:50px; left:10px; z-index:10;
+      background:#0008; color:#0f0; padding:6px 10px; border-radius:8px;
+      font:12px/1.6 monospace;
+    }
   </style>
 </head>
 <body>
-  <!-- UI ساده برای کنترل و راهنمای کاربر -->
+  <!-- UI -->
   <div id="ui">
     <button id="btnStart" class="btn">شروع اسکن</button>
     <button id="btnMute"  class="btn">🔇 بی‌صدا</button>
-    <span style="margin-inline-start:auto;font-size:12px;opacity:.8">برای کیفیت بهتر: HTTPS و مرورگر اصلی (Chrome/Safari)</span>
+    <span style="margin-inline-start:auto;font-size:12px;opacity:.8">HTTPS و مرورگر اصلی (Chrome/Safari)</span>
   </div>
+  <div id="status">status: boot</div>
   <div class="hint">گوشی را به قاب/تصویر هدف بگیرید تا ویدئو داخل قاب پخش شود.</div>
 
-  <!-- صحنه WebAR: MindAR با A-Frame و ردیابی تصویر -->
+  <!-- صحنه WebAR با autoStart -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets/target.mind; filterMinCF: 0.001; filterBeta: 0.01;"
+    mindar-image="imageTargetSrc: ./targets/target.mind; autoStart: true; filterMinCF: 0.001; filterBeta: 0.01;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
     renderer="colorManagement: true; physicallyCorrectLights: true"
@@ -52,9 +61,9 @@
     <!-- دوربین MindAR -->
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- ریشهٔ ویژگیِ هدف شماره ۰ -->
+    <!-- ریشهٔ هدف شماره ۰ -->
     <a-entity mindar-image-target="targetIndex: 0">
-      <!-- سطح پخش ویدئو: ابعاد را با نسبت ویدیوت هماهنگ کن (اینجا 16:9) -->
+      <!-- سطح پخش ویدیو (اینجا 16:9؛ در صورت نیاز height را عوض کن) -->
       <a-video
         id="videoPlane"
         src="#videoEl"
@@ -65,14 +74,14 @@
         material="shader: flat; transparent: true;">
       </a-video>
 
-      <!-- یک حاشیه‌ی نازک برای حس «داخل قاب بودن» (پشت ویدئو) -->
+      <!-- حاشیهٔ تیره پشت ویدیو برای حس قاب -->
       <a-plane position="0 0 -0.002" width="1.05" height="0.59" color="#111" material="opacity:0.6"></a-plane>
     </a-entity>
   </a-scene>
 
-  <!-- ویدئو HTML5 که روی صفحه سه‌بعدی نگاشت می‌شود -->
+  <!-- ویدیوی HTML5 که روی صفحهٔ سه‌بعدی نگاشت می‌شود -->
   <video id="videoEl" playsinline webkit-playsinline preload="auto" muted loop style="display:none">
-    <!-- ویدئو خودتان را جایگزین کنید -->
+    <!-- ویدیوی خودتان را جایگزین کنید -->
     <source src="./targets/video.mp4" type="video/mp4" />
   </video>
 
@@ -82,79 +91,67 @@
     const btnMute  = document.getElementById('btnMute');
     const videoEl  = document.getElementById('videoEl');
     const sceneEl  = document.querySelector('a-scene');
+    const statusEl = document.getElementById('status');
 
-    // برای autoplay موبایل، از بی‌صدا شروع کنیم
+    const setStatus = (s)=>{ statusEl.textContent = 'status: ' + s; console.log('[status]', s); };
+
+    // برای autoplay موبایل، بی‌صدا شروع می‌کنیم
     videoEl.muted = true;
 
-    // کمکی: نمایش خطا با نکات
+    // نمایش خطا با نکات کاربردی
     function showCameraError(err){
-      const httpsOK = location.protocol === 'https:';
-      const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
       console.error('Camera error:', err);
       alert(
         'مشکل دوربین: ' + (err && (err.name || err.message || err)) + '\n\n' +
-        (httpsOK ? '' : '⚠️ این صفحه روی HTTPS نیست.\n') +
-        (hasMedia ? '' : '⚠️ مرورگر getUserMedia ندارد.\n') +
+        (location.protocol==='https:' ? '' : '⚠️ این صفحه روی HTTPS نیست.\n') +
+        (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '' : '⚠️ مرورگر getUserMedia ندارد.\n') +
         'نکات:\n- صفحه را در Safari یا Chrome اصلی باز کن (نه داخل اینستاگرام/تلگرام).\n' +
         '- به سایت اجازه Camera بده.\n' +
         '- اگر VPN/Recorder دوربین فعاله، ببند.\n' +
-        '- همه‌ی تب‌های دوربین را ببند و ریفرش کن.'
+        '- همهٔ تب‌های دوربین را ببند و ریفرش کن.'
       );
     }
 
-    // بعد از لود کامل صحنه، سیستم‌ها در دسترس می‌شوند
+    // بعد از لود صحنه، سیستم‌ها آماده‌اند
     sceneEl.addEventListener('loaded', () => {
-      console.log('A-Frame scene loaded.');
+      setStatus('scene loaded');
 
-      // گرفتن سیستم MindAR
-      const arSystem = sceneEl.systems && (sceneEl.systems['mindar-image-system'] || sceneEl.systems['mindar-image']);
-      if (!arSystem) {
-        console.error('mindar-image-system پیدا نشد. آیا اسکریپت MindAR لود شده است؟');
-      }
+      // ایونت‌های MindAR
+      sceneEl.addEventListener('arReady', () => setStatus('ar ready (waiting for target)'));
+      sceneEl.addEventListener('arError', (e) => { setStatus('ar error'); console.error(e); });
+      sceneEl.addEventListener('targetFound', () => { setStatus('target found → playing'); videoEl.play().catch(()=>{}); });
+      sceneEl.addEventListener('targetLost',  () => { setStatus('target lost → paused'); videoEl.pause(); });
 
-      // ایونت‌های مفید
-      sceneEl.addEventListener('arReady', () => console.log('[MindAR] ready'));
-      sceneEl.addEventListener('arError', (e) => console.error('[MindAR] error', e));
-      sceneEl.addEventListener('targetFound', () => videoEl.play().catch(()=>{}));
-      sceneEl.addEventListener('targetLost',  () => videoEl.pause());
-
-      // دکمه صدا
+      // دکمهٔ صدا
       btnMute.addEventListener('click', () => {
         videoEl.muted = !videoEl.muted;
         btnMute.textContent = videoEl.muted ? '🔇 بی‌صدا' : '🔊 صدا روشن';
         if (!videoEl.paused) videoEl.play().catch(()=>{});
       });
 
-      // دکمه شروع
+      // دکمهٔ شروع: گرفتن اجازهٔ کاربر و kick اولیه برای autoplay
       btnStart.addEventListener('click', async () => {
         try {
-          if (!isSecureContext) {
-            alert('این صفحه باید روی HTTPS باز شود (مثل GitHub Pages).');
-            return;
-          }
+          if (!isSecureContext) { alert('این صفحه باید روی HTTPS باز شود.'); return; }
           if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
             throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
           }
-
-          // یک درخواست کوتاه برای مجوز دوربین؛ بلافاصله آزاد می‌کنیم
+          setStatus('requesting camera permission');
+          // درخواست کوتاه برای مجوز دوربین (بلافاصله آزاد می‌کنیم)
           const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
           stream.getTracks().forEach(t => t.stop());
-
-          if (!arSystem || !arSystem.start) {
-            throw new TypeError('MindAR system آماده/قابل‌دسترسی نیست (اسکریپت MindAR لود شده؟)');
-          }
-
-          // شروع AR و تلاش برای پخش ویدئو
-          await arSystem.start();
+          // kick اولیه برای برخی مرورگرها
           await videoEl.play().catch(()=>{});
           btnStart.textContent = 'اسکن فعال است';
           btnStart.disabled = true;
+          setStatus('ready (point camera to target)');
         } catch (err) {
           showCameraError(err);
+          setStatus('error');
         }
-      }, { once: false });
+      });
 
-      // برخی موبایل‌ها برای اولین پخش نیاز به تعامل دارند؛ با یک لمس هم تلاش می‌کنیم
+      // تعامل لمسی برای کمک به autoplay در iOS
       document.addEventListener('touchend', function once(){
         videoEl.play().catch(()=>{});
         document.removeEventListener('touchend', once, false);
