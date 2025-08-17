@@ -2,102 +2,165 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>قاب عکس WebAR – نمونه اولیه</title>
-  <!-- A-Frame و MindAR از CDN -->
-  <script src="https://unpkg.com/aframe@1.5.0/dist/aframe.min.js"></script>
-  <script src="https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>قاب عکس WebAR – نمونهٔ نهایی</title>
+
+  <!-- A-Frame و MindAR از CDN (jsDelivr پایدارتر از unpkg) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
   <style>
-    body, html { margin: 0; padding: 0; background:#000; height: 100%; }
-    #ui { position: fixed; z-index: 10; inset: 0 auto auto 0; padding: 10px; color: #fff; font-family: sans-serif; }
-    .hint { position: fixed; inset: auto 0 0 0; color:#fff; text-align:center; padding:10px; background:linear-gradient(transparent, rgba(0,0,0,.6)); font-family: sans-serif; }
-    .btn { background:#ffffff22; border:1px solid #ffffff55; color:#fff; padding:6px 10px; border-radius:10px; cursor:pointer; margin-inline-end:6px; }
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; background:#000; }
+    body { font-family: system-ui, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; color:#eee; }
+    #ui {
+      position: fixed; inset: 0 auto auto 0; z-index: 10;
+      display: flex; gap: 8px; align-items: center; padding: 10px 12px;
+      background: linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,0));
+      backdrop-filter: saturate(120%) blur(4px);
+    }
+    .btn {
+      background:#ffffff22; border:1px solid #ffffff55; color:#fff;
+      padding:6px 10px; border-radius:10px; cursor:pointer; font-size:14px;
+    }
+    .btn[disabled] { opacity:.6; cursor:default; }
+    .hint {
+      position: fixed; inset: auto 0 0 0; z-index: 9; text-align:center;
+      padding:10px 12px; font-size: 13px;
+      background: linear-gradient(transparent, rgba(0,0,0,.6));
+    }
   </style>
 </head>
 <body>
   <!-- UI ساده برای کنترل و راهنمای کاربر -->
   <div id="ui">
     <button id="btnStart" class="btn">شروع اسکن</button>
-    <button id="btnMute" class="btn">🔇 بی‌صدا</button>
+    <button id="btnMute"  class="btn">🔇 بی‌صدا</button>
+    <span style="margin-inline-start:auto;font-size:12px;opacity:.8">برای کیفیت بهتر: HTTPS و مرورگر اصلی (Chrome/Safari)</span>
   </div>
   <div class="hint">گوشی را به قاب/تصویر هدف بگیرید تا ویدئو داخل قاب پخش شود.</div>
 
   <!-- صحنه WebAR: MindAR با A-Frame و ردیابی تصویر -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets/target.mind; filterMinCF:0.001; filterBeta: 0.01; warmupTolerance: 5;"
+    mindar-image="imageTargetSrc: ./targets/target.mind; filterMinCF: 0.001; filterBeta: 0.01;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
-    renderer="colorManagement: true, physicallyCorrectLights: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
     embedded>
 
     <!-- دوربین MindAR -->
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- ریشه ویژگیِ هدف شماره ۰ -->
+    <!-- ریشهٔ ویژگیِ هدف شماره ۰ -->
     <a-entity mindar-image-target="targetIndex: 0">
-      <!-- سطح پخش ویدئو: ابعاد این صفحه باید با نسبت تصویر هدف هماهنگ باشد -->
+      <!-- سطح پخش ویدئو: ابعاد را با نسبت ویدیوت هماهنگ کن (اینجا 16:9) -->
       <a-video
         id="videoPlane"
         src="#videoEl"
         position="0 0 0"
         rotation="0 0 0"
         width="1"
-        height="0.5625"  
-        material="shader: flat; transparent: true;"
-        loop="true"
-      ></a-video>
+        height="0.5625"
+        material="shader: flat; transparent: true;">
+      </a-video>
 
-      <!-- یک حاشیه‌ی نازک برای القای حس «داخل قاب بودن» -->
+      <!-- یک حاشیه‌ی نازک برای حس «داخل قاب بودن» (پشت ویدئو) -->
       <a-plane position="0 0 -0.002" width="1.05" height="0.59" color="#111" material="opacity:0.6"></a-plane>
     </a-entity>
   </a-scene>
 
-  <!-- المان ویدئو واقعی HTML5 که روی صفحه سه‌بعدی نگاشت می‌شود -->
+  <!-- ویدئو HTML5 که روی صفحه سه‌بعدی نگاشت می‌شود -->
   <video id="videoEl" playsinline webkit-playsinline preload="auto" muted loop style="display:none">
-    <!-- ویدئوی خود را جایگزین کنید -->
+    <!-- ویدئو خودتان را جایگزین کنید -->
     <source src="./targets/video.mp4" type="video/mp4" />
   </video>
 
   <script>
-     const btnStart = document.getElementById('btnStart');
-  const videoEl = document.getElementById('videoEl');
-  const sceneEl = document.querySelector('a-scene');
+  (function(){
+    const btnStart = document.getElementById('btnStart');
+    const btnMute  = document.getElementById('btnMute');
+    const videoEl  = document.getElementById('videoEl');
+    const sceneEl  = document.querySelector('a-scene');
 
-  videoEl.muted = true; // برای autoplay در موبایل
+    // برای autoplay موبایل، از بی‌صدا شروع کنیم
+    videoEl.muted = true;
 
-  btnStart.addEventListener('click', async () => {
-    try {
-      if (!isSecureContext) {
-        alert('این صفحه باید روی HTTPS باشد.');
-        return;
-      }
-      // فقط MindAR دوربین رو می‌گیره
-      await sceneEl.systems['mindar-image-system'].start();
-
-      // شروع پخش بی‌صدا (iOS)
-      await videoEl.play().catch(()=>{});
-      btnStart.textContent = 'اسکن فعال است';
-      btnStart.disabled = true;
-    } catch (err) {
-      alert('خطای دوربین: ' + (err.name || err.message));
-      console.error(err);
+    // کمکی: نمایش خطا با نکات
+    function showCameraError(err){
+      const httpsOK = location.protocol === 'https:';
+      const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      console.error('Camera error:', err);
+      alert(
+        'مشکل دوربین: ' + (err && (err.name || err.message || err)) + '\n\n' +
+        (httpsOK ? '' : '⚠️ این صفحه روی HTTPS نیست.\n') +
+        (hasMedia ? '' : '⚠️ مرورگر getUserMedia ندارد.\n') +
+        'نکات:\n- صفحه را در Safari یا Chrome اصلی باز کن (نه داخل اینستاگرام/تلگرام).\n' +
+        '- به سایت اجازه Camera بده.\n' +
+        '- اگر VPN/Recorder دوربین فعاله، ببند.\n' +
+        '- همه‌ی تب‌های دوربین را ببند و ریفرش کن.'
+      );
     }
-  });
 
-  // وقتی تصویر پیدا شد
-  sceneEl.addEventListener('targetFound', () => videoEl.play().catch(()=>{}));
-  // وقتی گم شد
-  sceneEl.addEventListener('targetLost', () => videoEl.pause());
+    // بعد از لود کامل صحنه، سیستم‌ها در دسترس می‌شوند
+    sceneEl.addEventListener('loaded', () => {
+      console.log('A-Frame scene loaded.');
 
+      // گرفتن سیستم MindAR
+      const arSystem = sceneEl.systems && (sceneEl.systems['mindar-image-system'] || sceneEl.systems['mindar-image']);
+      if (!arSystem) {
+        console.error('mindar-image-system پیدا نشد. آیا اسکریپت MindAR لود شده است؟');
+      }
 
-  function explain(err){
-  const name = err && (err.name || err.toString());
-  alert('Camera error: ' + name + '\n' +
-        (location.protocol !== 'https:' ? '⚠️ این صفحه روی HTTPS نیست.\n' : '') +
-        (!('mediaDevices' in navigator) ? '⚠️ مرورگر از getUserMedia پشتیبانی نمی‌کند.\n' : '') +
-        'نکات:\n- سایت را در Safari/Chrome اصلی باز کن.\n- مجوز Camera را Allow کن.\n- اپ‌های دوربین را ببند.');
-  console.error(err);
-}
+      // ایونت‌های مفید
+      sceneEl.addEventListener('arReady', () => console.log('[MindAR] ready'));
+      sceneEl.addEventListener('arError', (e) => console.error('[MindAR] error', e));
+      sceneEl.addEventListener('targetFound', () => videoEl.play().catch(()=>{}));
+      sceneEl.addEventListener('targetLost',  () => videoEl.pause());
+
+      // دکمه صدا
+      btnMute.addEventListener('click', () => {
+        videoEl.muted = !videoEl.muted;
+        btnMute.textContent = videoEl.muted ? '🔇 بی‌صدا' : '🔊 صدا روشن';
+        if (!videoEl.paused) videoEl.play().catch(()=>{});
+      });
+
+      // دکمه شروع
+      btnStart.addEventListener('click', async () => {
+        try {
+          if (!isSecureContext) {
+            alert('این صفحه باید روی HTTPS باز شود (مثل GitHub Pages).');
+            return;
+          }
+          if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            throw new TypeError('getUserMedia در این محیط در دسترس نیست.');
+          }
+
+          // یک درخواست کوتاه برای مجوز دوربین؛ بلافاصله آزاد می‌کنیم
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          stream.getTracks().forEach(t => t.stop());
+
+          if (!arSystem || !arSystem.start) {
+            throw new TypeError('MindAR system آماده/قابل‌دسترسی نیست (اسکریپت MindAR لود شده؟)');
+          }
+
+          // شروع AR و تلاش برای پخش ویدئو
+          await arSystem.start();
+          await videoEl.play().catch(()=>{});
+          btnStart.textContent = 'اسکن فعال است';
+          btnStart.disabled = true;
+        } catch (err) {
+          showCameraError(err);
+        }
+      }, { once: false });
+
+      // برخی موبایل‌ها برای اولین پخش نیاز به تعامل دارند؛ با یک لمس هم تلاش می‌کنیم
+      document.addEventListener('touchend', function once(){
+        videoEl.play().catch(()=>{});
+        document.removeEventListener('touchend', once, false);
+      }, false);
+    });
+  })();
   </script>
 </body>
 </html>
