@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+    <title>قاب عکس AR — بدون نصب اپ</title>
+    <!-- A-Frame & MindAR (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <link rel="stylesheet" href="./styles.css"/>
+  </head>
+  <body>
+    <div id="ui">
+      <h1>قاب عکس AR</h1>
+      <ol>
+        <li>اجازهٔ دسترسی به دوربین را بده.</li>
+        <li>دوربین را به عکسِ چاپ‌شده بگیر.</li>
+        <li>اگر ویدیو پخش نشد، یک بار دکمهٔ «شروع» را بزن.</li>
+      </ol>
+      <button id="startBtn">شروع</button>
+      <div class="note">نکته: باید از روی HTTPS باز شود (مثل GitHub Pages).</div>
+    </div>
+
+    <!-- Hidden media (autoplay needs user gesture on some phones) -->
+    <video id="giftVideo" src="./assets/gift.mp4" loop playsinline webkit-playsinline preload="auto" style="display:none"></video>
+
+    <a-scene mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+             vr-mode-ui="enabled: false"
+             device-orientation-permission-ui="enabled: false"
+             renderer="colorManagement: true; physicallyCorrectLights: true;">
+      <a-assets></a-assets>
+
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-video src="#giftVideo" width="1" height="0.5625" position="0 0 0" rotation="0 0 0" material="shader: flat;"></a-video>
+        <a-entity text="value: سورپرایز!; align: center; color: #FFD700; width: 2" position="0 0.55 0.01"></a-entity>
+      </a-entity>
+
+      <a-entity light="type: ambient; intensity: 1"></a-entity>
+      <a-camera position="0 0 0"></a-camera>
+    </a-scene>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
